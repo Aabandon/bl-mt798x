@@ -4,8 +4,34 @@
 #include <linux/delay.h>
 #include <poller.h>
 #include <dm/ofnode.h>
+#include <linux/stringify.h>
 
 static struct poller_async led_p;
+
+/* If ipaddr or serverip is empty, mtktftploop functions are affected.
+Set ipaddr to CONFIG_IPADDR£¬set serverip to CONFIG_SERVERIP,
+and the IP address can be used normally after the router is restarted */
+static void setip(void)
+{
+	if ((env_get("ipaddr") == NULL) || (env_get("serverip") == NULL)) {
+		env_set("ipaddr", __stringify(CONFIG_IPADDR));
+		env_set("serverip", __stringify(CONFIG_SERVERIP));
+		env_save();
+	}
+}
+
+/* Loop TFTP download mode */
+static void mtktftploop(void)
+{
+	env_set("autostart", "yes");
+	env_set("loadaddr", __stringify(CONFIG_SYS_LOAD_ADDR));
+	env_save();
+
+	while(1) {
+		run_command("tftpboot initramfs-kernel.bin", 0);
+		mdelay(2000);
+	}
+}
 
 void led_control(const char *cmd, const char *name, const char *arg)
 {
@@ -54,7 +80,7 @@ static int do_glbtn(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 	ulong ts;
 
 	led_control("ledblink", "blink_led", "250");
-
+	setip();
 	gpio_power_clr();
 
 	button_label = env_get("glbtn_key");
@@ -79,7 +105,7 @@ static int do_glbtn(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 
 	ts = get_timer(0);
 
-	while (button_get_state(dev) && counter < 4) {
+	while (button_get_state(dev) && counter < 15) {
 		if (get_timer(ts) < 1000)
 			continue;
 
@@ -92,10 +118,15 @@ static int do_glbtn(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[
 
 	led_control("ledblink", "blink_led", "0");
 
-	if (counter == 4) {
+	if (counter < 10) {
 		led_control("led", "system_led", "on");
 		run_command("httpd", 0);
-	} else {
+	}
+	else if (counter >= 10) {
+		led_control("ledblink", "system_led", "200");
+		mtktftploop();
+	}
+	else {
 		led_control("ledblink", "blink_led", "0");
 	}
 
