@@ -17,6 +17,7 @@
 #include <u-boot/md5.h>
 #include <dm/ofnode.h>
 #include <version_string.h>
+#include <linux/stringify.h>
 
 #include "fs.h"
 
@@ -26,7 +27,8 @@ enum {
 	FW_TYPE_GPT,
 	FW_TYPE_BL2,
 	FW_TYPE_FIP,
-	FW_TYPE_FW
+	FW_TYPE_FW,
+	FW_TYPE_SPI
 };
 
 typedef struct fip_toc_header {
@@ -65,6 +67,11 @@ int write_fip(void *priv, const struct data_part_entry *dpe,
 int write_firmware(void *priv, const struct data_part_entry *dpe,
 			  const void *data, size_t size);
 
+#ifdef CONFIG_MTD_SPI_NAND
+int write_spi_nand0(void *priv, const struct data_part_entry *dpe,
+			  const void *data, size_t size);
+#endif
+
 static bool verify_fip(const void *data, size_t size)
 {
 	fip_toc_header_t *header = (fip_toc_header_t *)data;
@@ -97,6 +104,12 @@ static int write_firmware_failsafe(size_t data_addr, uint32_t data_size)
 			return -1;
 		r = write_fip(NULL, NULL, (const void *)data_addr, data_size);
 		break;
+#ifdef CONFIG_MTD_SPI_NAND
+
+	case FW_TYPE_SPI:
+		r = write_spi_nand0(NULL, NULL, (const void *)data_addr, data_size);
+		break;
+#endif
 
 	default:
 		r = write_firmware(NULL, NULL, (const void *)data_addr, data_size);
@@ -173,6 +186,27 @@ static void version_handler(enum httpd_uri_handler_status status,
 	response->status = HTTP_RESP_STD;
 
 	response->data = version_string;
+	response->size = strlen(response->data);
+
+	response->info.code = 200;
+	response->info.connection_close = 1;
+	response->info.content_type = "text/plain";
+}
+
+static void config_handler(enum httpd_uri_handler_status status,
+	struct httpd_request *request,
+	struct httpd_response *response)
+{
+	static char config[128];
+	if (status != HTTP_CB_NEW)
+		return;
+	response->status = HTTP_RESP_STD;
+#ifdef CONFIG_NET_FORCE_IPADDR
+	sprintf(config, "%s %s %s", CONFIG_DEFAULT_DEVICE_TREE, __stringify(CONFIG_IPADDR), env_get("serverip"));
+#else
+	sprintf(config, "%s %s %s", CONFIG_DEFAULT_DEVICE_TREE, env_get("ipaddr"), env_get("serverip"));
+#endif
+	response->data = config;
 	response->size = strlen(response->data);
 
 	response->info.code = 200;
@@ -264,6 +298,14 @@ static void upload_handler(enum httpd_uri_handler_status status,
 		fw_type = FW_TYPE_BL2;
 		goto done;
 	}
+
+#ifdef CONFIG_MTD_SPI_NAND
+	fw = httpd_request_find_value(request, "spi-nand0");
+	if (fw) {
+		fw_type = FW_TYPE_SPI;
+		goto done;
+	}
+#endif
 
 	fw = httpd_request_find_value(request, "fip");
 	if (fw) {
@@ -448,10 +490,14 @@ int start_web_failsafe(void)
 #if defined(CONFIG_MT7981_BOOTMENU_EMMC) || defined(CONFIG_MT7986_BOOTMENU_EMMC)
         httpd_register_uri_handler(inst, "/gpt.html", &html_handler, NULL);
 #endif
+#ifdef CONFIG_MTD_SPI_NAND
+        httpd_register_uri_handler(inst, "/spinand0.html", &html_handler, NULL);
+#endif
 	httpd_register_uri_handler(inst, "/bl2.html", &html_handler, NULL);
 	httpd_register_uri_handler(inst, "/uboot.html", &html_handler, NULL);
 	httpd_register_uri_handler(inst, "/fail.html", &html_handler, NULL);
 	httpd_register_uri_handler(inst, "/flashing.html", &html_handler, NULL);
+	httpd_register_uri_handler(inst, "/config", &config_handler, NULL);
 	httpd_register_uri_handler(inst, "/version", &version_handler, NULL);
 	httpd_register_uri_handler(inst, "/getmtdlayout", &mtd_layout_handler, NULL);
 	httpd_register_uri_handler(inst, "/upload", &upload_handler, NULL);

@@ -35,6 +35,7 @@ function ajax(opt) {
 }
 
 function startup(){
+    getconfig();
     getversion();
     getmtdlayoutlist();
 }
@@ -67,6 +68,18 @@ function getversion() {
         url: '/version',
         done: function(version) {
             document.getElementById('version').innerHTML = version
+        }
+    })
+}
+
+function getconfig() {
+    ajax({
+        url: '/config',
+        done: function(config) {
+            const info = config.split(' ');
+            document.getElementById('model').innerHTML = 'model: ' + info[0];
+            document.getElementById('ipaddr').innerHTML = 'ipaddr: ' + info[1];
+            document.getElementById('serverip').innerHTML = 'serverip: ' + info[2];
         }
     })
 }

@@ -87,6 +87,27 @@ static void version_handler(enum httpd_uri_handler_status status,
 	response->info.content_type = "text/plain";
 }
 
+static void config_handler(enum httpd_uri_handler_status status,
+	struct httpd_request *request,
+	struct httpd_response *response)
+{
+	static char config[128];
+	if (status != HTTP_CB_NEW)
+		return;
+	response->status = HTTP_RESP_STD;
+#ifdef CONFIG_NET_FORCE_IPADDR
+	sprintf(config, "%s %s %s", CONFIG_DEFAULT_DEVICE_TREE, CONFIG_IPADDR, env_get("serverip"));
+#else
+	sprintf(config, "%s %s %s", CONFIG_DEFAULT_DEVICE_TREE, env_get("ipaddr"), env_get("serverip"));
+#endif
+	response->data = config;
+	response->size = strlen(response->data);
+
+	response->info.code = 200;
+	response->info.connection_close = 1;
+	response->info.content_type = "text/plain";
+}
+
 static void index_handler(enum httpd_uri_handler_status status,
 			  struct httpd_request *request,
 			  struct httpd_response *response)
@@ -123,6 +144,16 @@ static void upload_handler(enum httpd_uri_handler_status status,
 	fw = httpd_request_find_value(request, "gpt");
 	if (fw) {
 		fw_type = FW_TYPE_GPT;
+		goto done;
+	}
+#endif
+
+#ifdef CONFIG_MTD_SPI_NAND
+	fw = httpd_request_find_value(request, "spi-nand0");
+	if (fw) {
+		fw_type = FW_TYPE_SPI;
+		if (failsafe_validate_image(fw->data, fw->size, fw_type))
+			goto fail;
 		goto done;
 	}
 #endif
@@ -385,9 +416,14 @@ int start_web_failsafe(void)
 	httpd_register_uri_handler(inst, "/uboot.html", &html_handler, NULL);
 	httpd_register_uri_handler(inst, "/bl2.html", &html_handler, NULL);
 	httpd_register_uri_handler(inst, "/getmtdlayout", &mtd_layout_handler, NULL);
+#ifdef CONFIG_MTD_SPI_NAND
+	httpd_register_uri_handler(inst, "/spinand0.html", &html_handler, NULL);
+#endif
+
 #ifdef CONFIG_MTK_BOOTMENU_MMC
 	httpd_register_uri_handler(inst, "/gpt.html", &html_handler, NULL);
 #endif
+	httpd_register_uri_handler(inst, "/config", &config_handler, NULL);
 	httpd_register_uri_handler(inst, "/version", &version_handler, NULL);
 	httpd_register_uri_handler(inst, "/result", &result_handler, NULL);
 	httpd_register_uri_handler(inst, "/style.css", &style_handler, NULL);

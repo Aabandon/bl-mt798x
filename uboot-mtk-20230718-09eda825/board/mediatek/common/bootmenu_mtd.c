@@ -104,6 +104,14 @@ static int write_fip(void *priv, const struct data_part_entry *dpe,
 	return write_part("fip", data, size, true);
 }
 
+#ifdef CONFIG_MTD_SPI_NAND
+int write_spi_nand0(void *priv, const struct data_part_entry *dpe,
+		     const void *data, size_t size)
+{
+	return write_part("spi-nand0", data, size, true);
+}
+#endif
+
 #ifdef CONFIG_MTK_FIP_SUPPORT
 static int write_bl31(void *priv, const struct data_part_entry *dpe,
 		      const void *data, size_t size)
@@ -393,6 +401,15 @@ static const struct data_part_entry mtd_parts[] = {
 		.validate = validate_firmware,
 		.write = write_firmware,
 	},
+#ifdef CONFIG_MTD_SPI_NAND
+	{
+		.name = "SPI-NAND",
+		.abbr = "spi-nand0",
+		.env_name = "bootfile.spi-nand0",
+		.post_action = UPGRADE_ACTION_BOOT,
+		.write = write_spi_nand0,
+	},
+#endif
 	{
 		.name = "Single image",
 		.abbr = "simg",
@@ -438,6 +455,12 @@ static const struct bootmenu_entry mtd_bootmenu_entries[] = {
 	{
 		.desc = "  Upgrade bootloader only",
 		.cmd = "mtkupgrade bl33"
+	},
+#endif
+#ifdef CONFIG_MTD_SPI_NAND
+	{
+		.desc = "Upgrade SPI-NAND",
+		.cmd = "mtkupgrade spi-nand0"
 	},
 #endif
 	{

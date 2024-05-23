@@ -33,6 +33,10 @@ obj-y += bl2.o
 FILE_bl2.o := bl2.html
 FSPATH_bl2.o := bl2.html
 
+obj-y += spinand0.o
+FILE_spinand0.o := spinand0.html
+FSPATH_spinand0.o := spinand0.html
+
 obj-y += gpt.o
 FILE_gpt.o := gpt.html
 FSPATH_gpt.o := gpt.html

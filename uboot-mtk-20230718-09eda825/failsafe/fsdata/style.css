@@ -106,6 +106,10 @@ ul {
 	margin-left: 155px;
 }
 
+#model, #ipaddr, #serverip {
+	font-size: 1.2em;
+}
+
 #upgrade {
 	text-align: center;
 }
